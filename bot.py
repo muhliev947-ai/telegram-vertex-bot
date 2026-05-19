@@ -210,6 +210,45 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(TEXT_HELP, reply_markup=get_back_keyboard())
 
 
+# ==================== ОБРАБОТЧИК КОНТАКТА ====================
+
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик отправки контакта"""
+    contact = update.message.contact
+    user = update.effective_user
+    
+    phone = contact.phone_number if contact else "не указан"
+    name = user.full_name
+    username = user.username or "без username"
+    user_id = user.id
+    
+    lead_info = (
+        f"🆕 НОВАЯ ЗАЯВКА (КОНТАКТ)!\n\n"
+        f"👤 Имя: {name}\n"
+        f"📱 Телефон: {phone}\n"
+        f"🆔 Username: @{username}\n"
+        f"🆔 User ID: {user_id}\n"
+        f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    
+    logger.info(f"Контакт от {name} (@{username}): {phone}")
+    
+    admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+    if admin_chat_id:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_chat_id,
+                text=lead_info
+            )
+        except Exception as e:
+            logger.error(f"Не удалось отправить админу: {e}")
+    
+    await update.message.reply_text(
+        "✅ Спасибо! Мы получили ваш контакт и свяжемся с вами в течение 15 минут.",
+        reply_markup=get_main_keyboard()
+    )
+
+
 # ==================== ОБРАБОТЧИКИ КНОПОК ====================
 
 async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -233,7 +272,6 @@ async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     elif text == BTN_CONTACTS:
         logger.info(f"Пользователь {user.id} запросил 'Контакты'")
-        # Отправляем контакты с кликабельными ссылками
         await update.message.reply_text(
             f"{TEXT_CONTACTS}\n\n"
             f"📧 Email: [vertexsite07@gmail.com](mailto:vertexsite07@gmail.com)\n"
@@ -288,17 +326,16 @@ async def handle_order_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if step == 'name':
         context.user_data['name'] = text
         context.user_data['order_step'] = 'project'
-        await update.message.reply_text(TEXT_AFTER_PROJECT)
+        await update.message.reply_text(TEXT_AFTER_NAME)
 
     elif step == 'project':
         context.user_data['project'] = text
         context.user_data['order_step'] = 'budget'
-        await update.message.reply_text(TEXT_AFTER_BUDGET)
+        await update.message.reply_text(TEXT_AFTER_PROJECT)
 
     elif step == 'budget':
         context.user_data['budget'] = text
 
-        # Формируем заявку
         lead_info = (
             f"🆕 НОВАЯ ЗАЯВКА!\n\n"
             f"👤 Имя: {context.user_data.get('name')}\n"
@@ -311,7 +348,6 @@ async def handle_order_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         logger.info(f"Заявка от {user.id}: {lead_info}")
 
-        # Отправляем админу (если задан)
         admin_chat_id = os.getenv("ADMIN_CHAT_ID")
         if admin_chat_id:
             try:
@@ -322,7 +358,6 @@ async def handle_order_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception as e:
                 logger.error(f"Не удалось отправить админу: {e}")
 
-        # Благодарим пользователя
         await update.message.reply_text(
             TEXT_THANK_YOU,
             reply_markup=get_portfolio_inline_keyboard()
@@ -388,8 +423,8 @@ def main():
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.CONTACT, handle_menu_buttons))
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu_buttons))
     application.add_handler(CallbackQueryHandler(handle_callback_query))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_order_input))
 
