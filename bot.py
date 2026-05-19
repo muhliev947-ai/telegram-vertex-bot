@@ -249,12 +249,73 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ==================== ОБРАБОТЧИКИ КНОПОК ====================
+# ==================== ОСНОВНОЙ ОБРАБОТЧИК (КНОПКИ + ЗАЯВКА) ====================
 
-async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Единый обработчик всех текстовых сообщений"""
     text = update.message.text
     user = update.effective_user
 
+    # Проверяем, есть ли активный процесс заявки
+    if context.user_data.get('order_step'):
+        # Пользователь в процессе заполнения заявки
+        step = context.user_data.get('order_step')
+
+        if text == BTN_BACK_TO_MENU:
+            context.user_data.clear()
+            await update.message.reply_text("🔙 Заявка отменена.", reply_markup=get_main_keyboard())
+            return
+
+        if step == 'name':
+            context.user_data['name'] = text
+            context.user_data['order_step'] = 'project'
+            await update.message.reply_text(TEXT_AFTER_NAME)
+
+        elif step == 'project':
+            context.user_data['project'] = text
+            context.user_data['order_step'] = 'budget'
+            await update.message.reply_text(TEXT_AFTER_PROJECT)
+
+        elif step == 'budget':
+            context.user_data['budget'] = text
+            context.user_data['order_step'] = 'phone'
+            await update.message.reply_text(TEXT_AFTER_BUDGET)
+
+        elif step == 'phone':
+            context.user_data['phone'] = text
+
+            lead_info = (
+                f"🆕 НОВАЯ ЗАЯВКА!\n\n"
+                f"👤 Имя: {context.user_data.get('name')}\n"
+                f"📋 Проект: {context.user_data.get('project')}\n"
+                f"💰 Бюджет: {context.user_data.get('budget')}\n"
+                f"📞 Телефон: {context.user_data.get('phone')}\n"
+                f"🆔 Username: @{user.username or 'нет'}\n"
+                f"🆔 User ID: {user.id}\n"
+                f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
+            logger.info(f"Заявка от {user.id}: {lead_info}")
+
+            admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+            if admin_chat_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=lead_info
+                    )
+                except Exception as e:
+                    logger.error(f"Не удалось отправить админу: {e}")
+
+            await update.message.reply_text(
+                TEXT_THANK_YOU,
+                reply_markup=get_portfolio_inline_keyboard()
+            )
+            context.user_data.clear()
+
+        return
+
+    # Если нет активной заявки — обрабатываем кнопки меню
     if text == BTN_ABOUT:
         logger.info(f"Пользователь {user.id} запросил 'О нас'")
         await update.message.reply_text(TEXT_ABOUT, reply_markup=get_back_keyboard())
@@ -310,67 +371,6 @@ async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             "❓ Пожалуйста, выберите пункт из меню.",
             reply_markup=get_main_keyboard()
         )
-
-
-# ==================== ОБРАБОТЧИК ЗАЯВКИ (ПОШАГОВЫЙ) ====================
-
-async def handle_order_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    text = update.message.text
-
-    if text == BTN_BACK_TO_MENU:
-        context.user_data.clear()
-        await update.message.reply_text("🔙 Отменено.", reply_markup=get_main_keyboard())
-        return
-
-    step = context.user_data.get('order_step')
-
-    if step == 'name':
-        context.user_data['name'] = text
-        context.user_data['order_step'] = 'project'
-        await update.message.reply_text(TEXT_AFTER_NAME)
-
-    elif step == 'project':
-        context.user_data['project'] = text
-        context.user_data['order_step'] = 'budget'
-        await update.message.reply_text(TEXT_AFTER_PROJECT)
-
-    elif step == 'budget':
-        context.user_data['budget'] = text
-        context.user_data['order_step'] = 'phone'
-        await update.message.reply_text(TEXT_AFTER_BUDGET)
-
-    elif step == 'phone':
-        context.user_data['phone'] = text
-
-        lead_info = (
-            f"🆕 НОВАЯ ЗАЯВКА!\n\n"
-            f"👤 Имя: {context.user_data.get('name')}\n"
-            f"📋 Проект: {context.user_data.get('project')}\n"
-            f"💰 Бюджет: {context.user_data.get('budget')}\n"
-            f"📞 Телефон: {context.user_data.get('phone')}\n"
-            f"🆔 Username: @{user.username or 'нет'}\n"
-            f"🆔 User ID: {user.id}\n"
-            f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-
-        logger.info(f"Заявка от {user.id}: {lead_info}")
-
-        admin_chat_id = os.getenv("ADMIN_CHAT_ID")
-        if admin_chat_id:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_chat_id,
-                    text=lead_info
-                )
-            except Exception as e:
-                logger.error(f"Не удалось отправить админу: {e}")
-
-        await update.message.reply_text(
-            TEXT_THANK_YOU,
-            reply_markup=get_portfolio_inline_keyboard()
-        )
-        context.user_data.clear()
 
 
 # ==================== ОБРАБОТЧИК КАЛЬКУЛЯТОРА ====================
@@ -432,9 +432,8 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_menu_buttons))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback_query))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_order_input))
 
     logger.info("🤖 Бот VERTEX запущен!")
     application.run_polling()
