@@ -17,7 +17,7 @@ from telegram.ext import (
     filters,
 )
 
-# Токен берём из переменной окружения Render
+# Токен из переменной окружения
 TOKEN = os.getenv("BOT_TOKEN")
 
 # --- Тексты кнопок ---
@@ -157,7 +157,7 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def run_bot():
+async def main():
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start_command))
@@ -167,11 +167,8 @@ async def run_bot():
 
     logger.info("Бот VERTEX запущен...")
 
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    await application.updater.idle()
+    await application.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    asyncio.run(main())
