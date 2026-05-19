@@ -8,7 +8,6 @@ Telegram бот для компании VERTEX
 
 import logging
 import os
-import re
 from datetime import datetime
 
 from telegram import (
@@ -84,7 +83,7 @@ TEXT_CONTACTS = (
     "📱 Telegram: @Fulstak_raz\n"
     "💬 WhatsApp: +7 928 092-2250\n\n"
     "🕐 Режим работы: 10:00 — 20:00 МСК\n\n"
-    "👉 Нажмите на email или Telegram, чтобы написать нам!"
+    "👉 Нажмите на ссылку ниже, чтобы написать нам в Telegram!"
 )
 
 TEXT_FAQ = (
@@ -216,12 +215,12 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отправки контакта"""
     contact = update.message.contact
     user = update.effective_user
-    
+
     phone = contact.phone_number if contact else "не указан"
     name = user.full_name
     username = user.username or "без username"
     user_id = user.id
-    
+
     lead_info = (
         f"🆕 НОВАЯ ЗАЯВКА (КОНТАКТ)!\n\n"
         f"👤 Имя: {name}\n"
@@ -230,9 +229,9 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 User ID: {user_id}\n"
         f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
-    
+
     logger.info(f"Контакт от {name} (@{username}): {phone}")
-    
+
     admin_chat_id = os.getenv("ADMIN_CHAT_ID")
     if admin_chat_id:
         try:
@@ -242,7 +241,7 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Не удалось отправить админу: {e}")
-    
+
     await update.message.reply_text(
         "✅ Спасибо! Мы получили ваш контакт и свяжемся с вами в течение 15 минут.",
         reply_markup=get_main_keyboard()
@@ -270,13 +269,12 @@ async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=get_portfolio_inline_keyboard()
         )
 
-      elif text == BTN_CONTACTS:
+    elif text == BTN_CONTACTS:
         logger.info(f"Пользователь {user.id} запросил 'Контакты'")
         await update.message.reply_text(
             f"{TEXT_CONTACTS}\n\n"
             f"📧 Email: vertexsite07@gmail.com\n"
-            f"📱 Telegram: @Fulstak_raz\n"
-            f"🔗 Ссылка: https://t.me/Fulstak_raz",
+            f"📱 Telegram: https://t.me/Fulstak_raz",
             reply_markup=get_back_keyboard()
         )
 
@@ -294,7 +292,10 @@ async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif text == BTN_ORDER:
         logger.info(f"Пользователь {user.id} начал оформление заявки")
         context.user_data['order_step'] = 'name'
-        await update.message.reply_text(TEXT_ORDER_REQUEST, reply_markup=ReplyKeyboardMarkup([[BTN_BACK_TO_MENU]], resize_keyboard=True))
+        await update.message.reply_text(
+            TEXT_ORDER_REQUEST,
+            reply_markup=ReplyKeyboardMarkup([[BTN_BACK_TO_MENU]], resize_keyboard=True)
+        )
 
     elif text == BTN_BACK_TO_MENU:
         context.user_data.clear()
