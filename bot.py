@@ -270,14 +270,14 @@ async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=get_portfolio_inline_keyboard()
         )
 
-    elif text == BTN_CONTACTS:
+      elif text == BTN_CONTACTS:
         logger.info(f"Пользователь {user.id} запросил 'Контакты'")
         await update.message.reply_text(
             f"{TEXT_CONTACTS}\n\n"
-            f"📧 Email: [vertexsite07@gmail.com](mailto:vertexsite07@gmail.com)\n"
-            f"📱 Telegram: [@Fulstak_raz](https://t.me/Fulstak_raz)",
-            reply_markup=get_back_keyboard(),
-            parse_mode="Markdown"
+            f"📧 Email: vertexsite07@gmail.com\n"
+            f"📱 Telegram: @Fulstak_raz\n"
+            f"🔗 Ссылка: https://t.me/Fulstak_raz",
+            reply_markup=get_back_keyboard()
         )
 
     elif text == BTN_FAQ:
