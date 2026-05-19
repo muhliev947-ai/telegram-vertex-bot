@@ -8,7 +8,6 @@ Telegram бот для компании VERTEX
 
 import logging
 import os
-import asyncio
 from datetime import datetime
 
 from telegram import (
@@ -46,7 +45,6 @@ BTN_CONTACTS = "📞 Контакты"
 BTN_SEND_CONTACT = "📲 Отправить контакт"
 BTN_BACK_TO_MENU = "🔙 В главное меню"
 BTN_ORDER = "📝 Оставить заявку"
-BTN_REVIEWS = "⭐ Отзывы"
 
 # ==================== ТЕКСТОВЫЕ БЛОКИ ====================
 
@@ -87,17 +85,6 @@ TEXT_CONTACTS = (
     "🕐 Режим работы: 10:00 — 20:00 МСК\n\n"
     "Или нажмите кнопку ниже, чтобы оставить заявку — "
     "мы свяжемся с вами в течение 15 минут!"
-)
-
-TEXT_REVIEWS = (
-    "⭐ **ОТЗЫВЫ НАШИХ КЛИЕНТОВ** ⭐\n\n"
-    "🌟 Александр: 'Сделали сайт для магазина за 2 недели. "
-    "Очень доволен результатом!'\n\n"
-    "🌟 Екатерина: 'Разработали приложение для доставки. "
-    "Работает отлично, клиенты довольны.'\n\n"
-    "🌟 Дмитрий: 'Лучшая команда для разработки сложных проектов. "
-    "Рекомендую!'\n\n"
-    "Больше отзывов на нашем сайте 👇"
 )
 
 TEXT_ORDER_REQUEST = (
@@ -334,8 +321,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ==================== ЗАПУСК БОТА ====================
 
-async def main():
-    """Главная функция запуска бота"""
+def main():
+    """Главная функция запуска бота (без asyncio.run())"""
     application = Application.builder().token(TOKEN).build()
 
     # Регистрация обработчиков
@@ -347,9 +334,9 @@ async def main():
 
     logger.info("🤖 Бот VERTEX запущен и готов к работе!")
     
-    # Запуск бота (polling)
-    await application.run_polling()
+    # Запуск бота (polling) - БЕЗ предварительного asyncio.run()
+    application.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
