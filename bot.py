@@ -67,12 +67,12 @@ TEXT_ABOUT = (
 
 TEXT_SERVICES = (
     "💎 НАШИ УСЛУГИ И ЦЕНЫ\n\n"
-    "• Landing page — от 15 000 ₽\n"
-    "• Корпоративный сайт — от 35 000 ₽\n"
-    "• Интернет-магазин — от 60 000 ₽\n"
-    "• SaaS / Дашборд — от 90 000 ₽\n"
-    "• Мобильное приложение — от 80 000 ₽\n"
-    "• Telegram бот — от 12 000 ₽\n\n"
+    "• Landing page — от 1500 ₽\n"
+    "• Корпоративный сайт — от 3500 ₽\n"
+    "• Интернет-магазин — от 6000 ₽\n"
+    "• SaaS / Дашборд — от 9000 ₽\n"
+    "• Мобильное приложение — от 8000 ₽\n"
+    "• Telegram бот — от 1200 ₽\n\n"
     "⚡️ Акция: Скидка 15% при заказе сайта + бота!\n\n"
     "📞 Для точного расчёта — свяжитесь с нами."
 )
@@ -111,6 +111,7 @@ TEXT_ORDER_REQUEST = (
 
 TEXT_AFTER_NAME = "2️⃣ Что нужно разработать? (сайт, магазин, приложение, бот)"
 TEXT_AFTER_PROJECT = "3️⃣ Какой у вас бюджет? (примерная сумма)"
+TEXT_AFTER_BUDGET = "4️⃣ Напишите ваш номер телефона для связи:"
 
 TEXT_THANK_YOU = (
     "✅ СПАСИБО ЗА ЗАЯВКУ!\n\n"
@@ -336,12 +337,18 @@ async def handle_order_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     elif step == 'budget':
         context.user_data['budget'] = text
+        context.user_data['order_step'] = 'phone'
+        await update.message.reply_text(TEXT_AFTER_BUDGET)
+
+    elif step == 'phone':
+        context.user_data['phone'] = text
 
         lead_info = (
             f"🆕 НОВАЯ ЗАЯВКА!\n\n"
             f"👤 Имя: {context.user_data.get('name')}\n"
             f"📋 Проект: {context.user_data.get('project')}\n"
             f"💰 Бюджет: {context.user_data.get('budget')}\n"
+            f"📞 Телефон: {context.user_data.get('phone')}\n"
             f"🆔 Username: @{user.username or 'нет'}\n"
             f"🆔 User ID: {user.id}\n"
             f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -373,11 +380,11 @@ async def handle_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     prices = {
-        "price_landing": "📄 Landing page\n💰 от 15 000 ₽\n📅 3-5 дней",
-        "price_corporate": "🏢 Корпоративный сайт\n💰 от 35 000 ₽\n📅 7-10 дней",
-        "price_shop": "🛒 Интернет-магазин\n💰 от 60 000 ₽\n📅 14-21 день",
-        "price_app": "📱 Мобильное приложение\n💰 от 80 000 ₽\n📅 от 30 дней",
-        "price_bot": "🤖 Telegram бот\n💰 от 12 000 ₽\n📅 3-7 дней",
+        "price_landing": "📄 Landing page\n💰 от 1500 ₽\n📅 3-5 дней",
+        "price_corporate": "🏢 Корпоративный сайт\n💰 от 3500 ₽\n📅 7-10 дней",
+        "price_shop": "🛒 Интернет-магазин\n💰 от 6000 ₽\n📅 14-21 день",
+        "price_app": "📱 Мобильное приложение\n💰 от 8000 ₽\n📅 от 30 дней",
+        "price_bot": "🤖 Telegram бот\n💰 от 1200 ₽\n📅 3-7 дней",
     }
 
     text = prices.get(query.data, "Выберите проект из списка")
