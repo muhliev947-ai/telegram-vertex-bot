@@ -32,6 +32,14 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("❌ BOT_TOKEN не задан!")
 
+# Второй бот для отправки уведомлений (Vertex_site_bot)
+NOTIFIER_TOKEN = os.getenv("NOTIFIER_BOT_TOKEN")
+notifier_bot = None
+
+# Твой личный Chat ID (куда отправлять заявки)
+# Узнать можно: написать @Vertex_site_bot → https://api.telegram.org/bot<TOKEN>/getUpdates
+YOUR_CHAT_ID = 1371388170  # ← ЗАМЕНИ НА СВОЙ CHAT_ID
+
 PORTFOLIO_URL = "https://next-site-self-two.vercel.app"
 
 # ==================== ТЕКСТЫ КНОПОК ====================
@@ -297,6 +305,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             logger.info(f"Заявка от {user.id}: {lead_info}")
 
+            # Отправляем админу (если задан)
             admin_chat_id = os.getenv("ADMIN_CHAT_ID")
             if admin_chat_id:
                 try:
@@ -306,6 +315,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                 except Exception as e:
                     logger.error(f"Не удалось отправить админу: {e}")
+
+            # ========== ОТПРАВКА НА Vertex_site_bot ==========
+            global notifier_bot
+            if not notifier_bot and NOTIFIER_TOKEN:
+                from telegram.ext import ApplicationBuilder
+                notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
+                notifier_bot = notifier_app.bot
+            
+            if notifier_bot:
+                try:
+                    await notifier_bot.send_message(chat_id=YOUR_CHAT_ID, text=lead_info)
+                    logger.info("Lead info sent to Vertex_site_bot")
+                except Exception as e:
+                    logger.error(f"Could not send to Vertex_site_bot: {e}")
+            # ================================================
 
             await update.message.reply_text(
                 TEXT_THANK_YOU,
@@ -380,11 +404,11 @@ async def handle_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     prices = {
-        "price_landing": "📄 Landing page\n💰 от 1500 ₽\n📅 3-5 дней",
-        "price_corporate": "🏢 Корпоративный сайт\n💰 от 3500 ₽\n📅 7-10 дней",
+        "price_landing": "📄 Landing page\n💰 от 1500 ₽\n📅 2-4 дней",
+        "price_corporate": "🏢 Корпоративный сайт\n💰 от 3500 ₽\n📅 3-6 дней",
         "price_shop": "🛒 Интернет-магазин\n💰 от 6000 ₽\n📅 14-21 день",
-        "price_app": "📱 Мобильное приложение\n💰 от 8000 ₽\n📅 от 30 дней",
-        "price_bot": "🤖 Telegram бот\n💰 от 1200 ₽\n📅 3-7 дней",
+        "price_app": "📱 Мобильное приложение\n💰 от 8000 ₽\n📅 от 10 дней",
+        "price_bot": "🤖 Telegram бот\n💰 от 1200 ₽\n📅 2-3 дней",
     }
 
     text = prices.get(query.data, "Выберите проект из списка")
@@ -427,6 +451,15 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 # ==================== ЗАПУСК БОТА ====================
 
 def main():
+    global notifier_bot
+    
+    # Инициализация второго бота (Vertex_site_bot)
+    if NOTIFIER_TOKEN and not notifier_bot:
+        from telegram.ext import ApplicationBuilder
+        notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
+        notifier_bot = notifier_app.bot
+        logger.info("Notifier bot (Vertex_site_bot) initialized")
+
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start_command))
