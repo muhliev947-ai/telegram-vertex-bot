@@ -8,6 +8,7 @@ Telegram бот для компании VERTEX
 
 import logging
 import os
+import re
 from datetime import datetime
 
 from telegram import (
@@ -37,8 +38,8 @@ NOTIFIER_TOKEN = os.getenv("NOTIFIER_BOT_TOKEN")
 notifier_bot = None
 
 # Твой личный Chat ID (куда отправлять заявки)
-# Узнать можно: написать @Vertex_site_bot → https://api.telegram.org/bot<TOKEN>/getUpdates
-YOUR_CHAT_ID = 1371388170  # ← ЗАМЕНИ НА СВОЙ CHAT_ID
+# Узнать можно: написать Vertex_site_bot → https://api.telegram.org/bot<TOKEN>/getUpdates
+YOUR_CHAT_ID = 1371388170
 
 PORTFOLIO_URL = "https://next-site-self-two.vercel.app"
 
@@ -161,6 +162,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+def clean_text(text):
+    """Удаляет непечатные символы и лишние пробелы"""
+    if not text:
+        return "не указан"
+    cleaned = re.sub(r'[^\w\s@\.\+\-\_\,\(\)]', '', str(text))
+    return cleaned.strip() or "не указан"
+
+
 # ==================== КЛАВИАТУРЫ ====================
 
 def get_main_keyboard():
@@ -232,9 +243,9 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lead_info = (
         f"🆕 НОВАЯ ЗАЯВКА (КОНТАКТ)!\n\n"
-        f"👤 Имя: {name}\n"
-        f"📱 Телефон: {phone}\n"
-        f"🆔 Username: @{username}\n"
+        f"👤 Имя: {clean_text(name)}\n"
+        f"📱 Телефон: {clean_text(phone)}\n"
+        f"🆔 Username: @{clean_text(username)}\n"
         f"🆔 User ID: {user_id}\n"
         f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
@@ -251,6 +262,20 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Не удалось отправить админу: {e}")
 
+    # Отправка на Vertex_site_bot
+    global notifier_bot
+    if not notifier_bot and NOTIFIER_TOKEN:
+        from telegram.ext import ApplicationBuilder
+        notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
+        notifier_bot = notifier_app.bot
+
+    if notifier_bot:
+        try:
+            await notifier_bot.send_message(chat_id=YOUR_CHAT_ID, text=lead_info)
+            logger.info("Lead info sent to Vertex_site_bot")
+        except Exception as e:
+            logger.error(f"Could not send to Vertex_site_bot: {e}")
+
     await update.message.reply_text(
         "✅ Спасибо! Мы получили ваш контакт и свяжемся с вами в течение 15 минут.",
         reply_markup=get_main_keyboard()
@@ -266,7 +291,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Проверяем, есть ли активный процесс заявки
     if context.user_data.get('order_step'):
-        # Пользователь в процессе заполнения заявки
         step = context.user_data.get('order_step')
 
         if text == BTN_BACK_TO_MENU:
@@ -292,13 +316,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif step == 'phone':
             context.user_data['phone'] = text
 
+            # Автоматически берём юзернейм из Telegram
+            tg_username = user.username or "не указан"
+
             lead_info = (
                 f"🆕 НОВАЯ ЗАЯВКА!\n\n"
-                f"👤 Имя: {context.user_data.get('name')}\n"
-                f"📋 Проект: {context.user_data.get('project')}\n"
-                f"💰 Бюджет: {context.user_data.get('budget')}\n"
-                f"📞 Телефон: {context.user_data.get('phone')}\n"
-                f"🆔 Username: @{user.username or 'нет'}\n"
+                f"👤 Имя: {clean_text(context.user_data.get('name'))}\n"
+                f"📋 Проект: {clean_text(context.user_data.get('project'))}\n"
+                f"💰 Бюджет: {clean_text(context.user_data.get('budget'))}\n"
+                f"📞 Телефон: {clean_text(context.user_data.get('phone'))}\n"
+                f"🆔 Telegram: @{clean_text(tg_username)}\n"
                 f"🆔 User ID: {user.id}\n"
                 f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
@@ -316,20 +343,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Не удалось отправить админу: {e}")
 
-            # ========== ОТПРАВКА НА Vertex_site_bot ==========
+            # Отправка на Vertex_site_bot
             global notifier_bot
             if not notifier_bot and NOTIFIER_TOKEN:
                 from telegram.ext import ApplicationBuilder
                 notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
                 notifier_bot = notifier_app.bot
-            
+
             if notifier_bot:
                 try:
                     await notifier_bot.send_message(chat_id=YOUR_CHAT_ID, text=lead_info)
                     logger.info("Lead info sent to Vertex_site_bot")
                 except Exception as e:
                     logger.error(f"Could not send to Vertex_site_bot: {e}")
-            # ================================================
 
             await update.message.reply_text(
                 TEXT_THANK_YOU,
@@ -404,11 +430,11 @@ async def handle_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     prices = {
-        "price_landing": "📄 Landing page\n💰 от 1500 ₽\n📅 2-4 дней",
-        "price_corporate": "🏢 Корпоративный сайт\n💰 от 3500 ₽\n📅 3-6 дней",
+        "price_landing": "📄 Landing page\n💰 от 1500 ₽\n📅 3-5 дней",
+        "price_corporate": "🏢 Корпоративный сайт\n💰 от 3500 ₽\n📅 7-10 дней",
         "price_shop": "🛒 Интернет-магазин\n💰 от 6000 ₽\n📅 14-21 день",
-        "price_app": "📱 Мобильное приложение\n💰 от 8000 ₽\n📅 от 10 дней",
-        "price_bot": "🤖 Telegram бот\n💰 от 1200 ₽\n📅 2-3 дней",
+        "price_app": "📱 Мобильное приложение\n💰 от 8000 ₽\n📅 от 30 дней",
+        "price_bot": "🤖 Telegram бот\n💰 от 1200 ₽\n📅 3-7 дней",
     }
 
     text = prices.get(query.data, "Выберите проект из списка")
