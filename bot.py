@@ -113,5 +113,5 @@ if __name__ == "__main__":
     asyncio.run(set_webhook())
 
     print("Starting Flask server...")
-    port = int(os.environ.get("PORT", 10000))  # ВАЖНО: Render даёт свой порт
+    port = int(os.environ.get("PORT", 10000))  # ВАЖНО!
     app.run(host="0.0.0.0", port=port)
