@@ -20,7 +20,7 @@ from telegram.ext import (
     filters
 )
 
-# ==================== КОНФИГУРАЦИЯ ====================
+# ==================== КОНФИГУРАЦИЯ ================
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("❌ BOT_TOKEN не задан!")
