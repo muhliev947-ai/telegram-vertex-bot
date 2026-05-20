@@ -150,34 +150,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # ---------- МЕНЮ ----------
-    if text == BTN_ABOUT:
+        # ---------- МЕНЮ ----------
+    if "О нас" in text:
         await update.message.reply_text(TEXT_ABOUT, reply_markup=main_keyboard())
         return
 
-    if text == BTN_SERVICES:
+    if "Услуги" in text:
         await update.message.reply_text(TEXT_SERVICES, reply_markup=main_keyboard())
         return
 
-    if text == BTN_PORTFOLIO:
+    if "Портфолио" in text:
         await update.message.reply_text("🖼 Наше портфолио:", reply_markup=portfolio_keyboard())
         return
 
-    if text == BTN_CONTACTS:
+    if "Контакты" in text:
         await update.message.reply_text("📞 Контакты:\nTelegram: @vertex_dev\nEmail: info@vertex.com", reply_markup=main_keyboard())
         return
 
-    if text == BTN_FAQ:
+    if "FAQ" in text:
         await update.message.reply_text("❓ Частые вопросы:\n• Сроки?\n• Стоимость?\n• Этапы работы?", reply_markup=main_keyboard())
         return
 
-    if text == BTN_CALC:
+    if "Калькулятор" in text:
         await update.message.reply_text("🧮 Выберите тип проекта:", reply_markup=calc_keyboard())
         return
 
-    if text == BTN_ORDER:
+    if "Оставить заявку" in text:
         context.user_data["order_step"] = "name"
         await update.message.reply_text(TEXT_ORDER_1)
         return
+
 
     # ---------- ФОЛБЭК ----------
     await update.message.reply_text("🤖 Я вас понял! Выберите действие в меню ниже 👇", reply_markup=main_keyboard())
