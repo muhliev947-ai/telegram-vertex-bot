@@ -9,6 +9,7 @@ Telegram бот для компании VERTEX
 import logging
 import os
 import re
+import requests
 from datetime import datetime
 
 from telegram import (
@@ -33,12 +34,11 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("❌ BOT_TOKEN не задан!")
 
-# Второй бот для отправки уведомлений (Vertex_site_bot)
+# Токен бота для уведомлений (Vertex_site_bot или nocodelabebot)
 NOTIFIER_TOKEN = os.getenv("NOTIFIER_BOT_TOKEN")
-notifier_bot = None
 
 # Твой личный Chat ID (куда отправлять заявки)
-# Узнать можно: написать Vertex_site_bot → https://api.telegram.org/bot<TOKEN>/getUpdates
+# Узнать можно: написать боту → https://api.telegram.org/bot<TOKEN>/getUpdates
 YOUR_CHAT_ID = 1371388170
 
 PORTFOLIO_URL = "https://next-site-self-two.vercel.app"
@@ -168,7 +168,10 @@ def clean_text(text):
     """Удаляет непечатные символы и лишние пробелы"""
     if not text:
         return "не указан"
-    cleaned = re.sub(r'[^\w\s@\.\+\-\_\,\(\)]', '', str(text))
+    # Принудительно преобразуем в ASCII, заменяя все не-ASCII символы
+    cleaned = str(text).encode('ascii', 'ignore').decode('ascii')
+    # Удаляем любые непечатные символы
+    cleaned = re.sub(r'[^\x20-\x7E]', '', cleaned)
     return cleaned.strip() or "не указан"
 
 
@@ -262,19 +265,21 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Не удалось отправить админу: {e}")
 
-    # Отправка на Vertex_site_bot
-    global notifier_bot
-    if not notifier_bot and NOTIFIER_TOKEN:
-        from telegram.ext import ApplicationBuilder
-        notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
-        notifier_bot = notifier_app.bot
-
-    if notifier_bot:
+    # Отправка на бота-уведомлятора через прямой HTTP-запрос
+    if NOTIFIER_TOKEN:
         try:
-            await notifier_bot.send_message(chat_id=YOUR_CHAT_ID, text=lead_info)
-            logger.info("Lead info sent to Vertex_site_bot")
+            url = f"https://api.telegram.org/bot{NOTIFIER_TOKEN}/sendMessage"
+            payload = {
+                "chat_id": YOUR_CHAT_ID,
+                "text": lead_info
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            if response.status_code == 200:
+                logger.info("Lead info sent to notifier bot via requests")
+            else:
+                logger.error(f"Failed to send: {response.status_code} - {response.text}")
         except Exception as e:
-            logger.error(f"Could not send to Vertex_site_bot: {e}")
+            logger.error(f"Could not send to notifier bot: {e}")
 
     await update.message.reply_text(
         "✅ Спасибо! Мы получили ваш контакт и свяжемся с вами в течение 15 минут.",
@@ -343,19 +348,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Не удалось отправить админу: {e}")
 
-            # Отправка на Vertex_site_bot
-            global notifier_bot
-            if not notifier_bot and NOTIFIER_TOKEN:
-                from telegram.ext import ApplicationBuilder
-                notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
-                notifier_bot = notifier_app.bot
-
-            if notifier_bot:
+            # Отправка на бота-уведомлятора через прямой HTTP-запрос
+            if NOTIFIER_TOKEN:
                 try:
-                    await notifier_bot.send_message(chat_id=YOUR_CHAT_ID, text=lead_info)
-                    logger.info("Lead info sent to Vertex_site_bot")
+                    url = f"https://api.telegram.org/bot{NOTIFIER_TOKEN}/sendMessage"
+                    payload = {
+                        "chat_id": YOUR_CHAT_ID,
+                        "text": lead_info
+                    }
+                    response = requests.post(url, json=payload, timeout=10)
+                    if response.status_code == 200:
+                        logger.info("Lead info sent to notifier bot via requests")
+                    else:
+                        logger.error(f"Failed to send: {response.status_code} - {response.text}")
                 except Exception as e:
-                    logger.error(f"Could not send to Vertex_site_bot: {e}")
+                    logger.error(f"Could not send to notifier bot: {e}")
 
             await update.message.reply_text(
                 TEXT_THANK_YOU,
@@ -477,15 +484,6 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 # ==================== ЗАПУСК БОТА ====================
 
 def main():
-    global notifier_bot
-    
-    # Инициализация второго бота (Vertex_site_bot)
-    if NOTIFIER_TOKEN and not notifier_bot:
-        from telegram.ext import ApplicationBuilder
-        notifier_app = ApplicationBuilder().token(NOTIFIER_TOKEN).build()
-        notifier_bot = notifier_app.bot
-        logger.info("Notifier bot (Vertex_site_bot) initialized")
-
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start_command))
