@@ -11,7 +11,7 @@ from flask import Flask, request
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # https://your-service.onrender.com/webhook
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # https://telegram-vertex-bot.onrender.com
 
 app = Flask(__name__)
 
@@ -95,12 +95,12 @@ def webhook():
     return "OK", 200
 
 
-# ---------------- Startup ----------------
-
 @app.get("/")
 def home():
     return "Bot is running!", 200
 
+
+# ---------------- Startup ----------------
 
 async def set_webhook():
     await tg_app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
@@ -113,4 +113,5 @@ if __name__ == "__main__":
     asyncio.run(set_webhook())
 
     print("Starting Flask server...")
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))  # ВАЖНО: Render даёт свой порт
+    app.run(host="0.0.0.0", port=port)
