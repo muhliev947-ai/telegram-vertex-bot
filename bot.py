@@ -7,20 +7,31 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from flask import Flask, request
 
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # https://your-service.onrender.com/webhook
+
+app = Flask(__name__)
 
 MAIN_MENU = ReplyKeyboardMarkup(
     [["Оставить заявку", "Контакты"], ["О компании"]],
     resize_keyboard=True
 )
 
+# Telegram application
+tg_app = Application.builder().token(TOKEN).build()
+
+
+# ---------------- Telegram Handlers ----------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Здравствуйте! Я бот компании VERTEX.\nВыберите действие:",
         reply_markup=MAIN_MENU
     )
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -70,18 +81,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=MAIN_MENU
     )
 
-def main():
-    print("BOT STARTING...")  # Проверка запуска
 
-    if not TOKEN:
-        raise RuntimeError("❌ BOT_TOKEN не найден!")
+tg_app.add_handler(CommandHandler("start", start))
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+# ---------------- Flask Webhook ----------------
 
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+@app.post("/webhook")
+def webhook():
+    update = Update.de_json(request.json, tg_app.bot)
+    tg_app.update_queue.put_nowait(update)
+    return "OK", 200
+
+
+# ---------------- Startup ----------------
+
+@app.get("/")
+def home():
+    return "Bot is running!", 200
+
+
+async def set_webhook():
+    await tg_app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    print("Setting webhook...")
+    asyncio.run(set_webhook())
+
+    print("Starting Flask server...")
+    app.run(host="0.0.0.0", port=10000)
