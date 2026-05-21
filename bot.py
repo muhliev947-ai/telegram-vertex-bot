@@ -178,8 +178,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # MAIN
 # =========================
+# ========================= MAIN =========================
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+
     conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("✍️ Оставить заявку"), menu_handler)],
         states={
@@ -191,10 +193,29 @@ def main():
         },
         fallbacks=[MessageHandler(filters.Regex("❌ Отменить"), cancel)],
     )
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
-    print("✅ VERTEX Bot запущен!")
-    app.run_polling()
-if __name__ == "__main__":
-    main()
+
+    # Запуск Flask сервера
+    threading.Thread(target=lambda: flask_app.run(host='0.0.0.0', port=PORT, debug=False), daemon=True).start()
+
+    logger.info("✅ VERTEX Bot запущен!")
+
+    # === Главное изменение ===
+    if WEBHOOK_URL:
+        # Удаляем старый webhook и конфликты
+        import asyncio
+        asyncio.run(app.bot.delete_webhook(drop_pending_updates=True))
+        logger.info(f"✅ Webhook установлен на: {WEBHOOK_URL}/webhook")
+        
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="webhook",
+            webhook_url=f"{WEBHOOK_URL}/webhook"
+        )
+    else:
+        logger.warning("⚠️ WEBHOOK_URL не задан → работаем на polling (не рекомендуется)")
+        app.run_polling()
