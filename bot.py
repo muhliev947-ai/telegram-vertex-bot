@@ -1,213 +1,235 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-import logging
 import os
-import re
+import logging
 from datetime import datetime
-from flask import Flask, request
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, ConversationHandler,
+    ContextTypes, filters
+)
 
-# ==================== КОНФИГУРАЦИЯ ====================
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    raise ValueError("❌ BOT_TOKEN не задан!")
+# =========================
+# CONFIG
+# =========================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_CHAT_ID = 1371388170   # ← Убедись, что это твой ID!
 
-YOUR_CHAT_ID = 1371388170
-PORT = int(os.environ.get('PORT', 10000))
-PORTFOLIO_URL = "https://next-site-self-two.vercel.app"
+SITE_URL = "https://next-site-self-two.vercel.app"
+PORTFOLIO_URL = "https://next-site-self-two.vercel.app/portfolio"
+CONTACT_TELEGRAM = "@Fulstak_raz"
+CONTACT_EMAIL = "vertexsite07@gmail.com"
+CONTACT_PHONE = "+7 928 092-2250"
 
-# ==================== ЛОГИРОВАНИЕ ====================
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN not found!")
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-def clean_text(text):
-    if not text:
-        return "не указан"
-    cleaned = re.sub(r'[^\w\s@\.\+\-\_\,\(\)]', '', str(text))
-    return cleaned.strip() or "не указан"
+# =========================
+# STATES
+# =========================
+NAME, PROJECT, BUDGET, CONTACT, CONFIRM = range(5)
 
-# ==================== КНОПКИ И ТЕКСТЫ ====================
-BTN_ABOUT = "📖 О нас"
-BTN_SERVICES = "💰 Услуги"
-BTN_PORTFOLIO = "🖼 Портфолио"
-BTN_CONTACTS = "📞 Контакты"
-BTN_FAQ = "❓ FAQ"
-BTN_ORDER = "📝 Оставить заявку"
-BTN_CALC = "🧮 Калькулятор цен"
-BTN_BACK_TO_MENU = "🔙 В главное меню"
+# =========================
+# KEYBOARDS
+# =========================
+MAIN_MENU = ReplyKeyboardMarkup(
+    [
+        ["🏢 О студии", "💼 Услуги и цены"],
+        ["🖼 Портфолио", "❓ FAQ"],
+        ["📞 Контакты", "✍️ Оставить заявку"]
+    ],
+    resize_keyboard=True
+)
 
-TEXT_SERVICES = (
-    "💎 УСЛУГИ И ЦЕНЫ\n"
+CANCEL_MENU = ReplyKeyboardMarkup([["❌ Отменить"]], resize_keyboard=True)
+
+# =========================
+# TEXTS
+# =========================
+START_TEXT = "Здравствуйте!\n\nДобро пожаловать в **VERTEX** — студию премиального digital-разработки."
+
+ABOUT_TEXT = (
+    "🏢 **VERTEX** — цифровая студия полного цикла.\n\n"
+    "Мы создаём современные сайты, дизайн и системы автоматизации, которые помогают бизнесу выделяться."
+)
+
+SERVICES_TEXT = (
+    "💼 **Услуги и цены VERTEX**\n\n"
+    "🖥 **Веб-разработка**\n"
     "• Landing page — от 1500 ₽\n"
     "• Корпоративный сайт — от 3500 ₽\n"
     "• Интернет-магазин — от 6000 ₽\n"
-    "• SaaS / Дашборд — от 9000 ₽\n"
-    "• Мобильное приложение — от 8000 ₽\n"
-    "• Telegram бот — от 1200 ₽"
+    "• SaaS / Дашборд — от 9000 ₽\n\n"
+    "🎨 **Дизайн и брендинг**\n"
+    "• Логотип и фирменный стиль — от 1000 ₽\n"
+    "• UI/UX дизайн сайта — от 2000 ₽\n\n"
+    "📈 **Продвижение**\n"
+    "• SEO-оптимизация — от 1500 ₽\n"
+    "• Контекстная реклама — от 2000 ₽\n\n"
+    "🤖 **Автоматизация**\n"
+    "• Telegram бот — от 1200 ₽\n"
+    "• Интеграция с CRM — от 2500 ₽\n\n"
+    "⚡️ **Акция:** Скидка 10% на первый проект!\n\n"
+    f"🌐 Подробнее: [{SITE_URL}]({SITE_URL})"
 )
-TEXT_START = "👋 Добро пожаловать в VERTEX!\nВыберите раздел в меню ниже 👇"
-TEXT_ORDER_REQUEST = "📝 ОСТАВИТЬ ЗАЯВКУ\n\n1️⃣ Ваше имя:"
-TEXT_AFTER_NAME = "2️⃣ Что нужно разработать? (сайт, магазин, приложение, бот)"
-TEXT_AFTER_PROJECT = "3️⃣ Ваш бюджет? (примерная сумма)"
-TEXT_AFTER_BUDGET = "4️⃣ Ваш телефон для связи:"
-TEXT_THANK_YOU = "✅ Заявка принята! Мы свяжемся с вами в течение 15 минут."
 
-def get_main_keyboard():
-    return ReplyKeyboardMarkup([
-        [BTN_ABOUT, BTN_SERVICES],
-        [BTN_PORTFOLIO, BTN_CONTACTS],
-        [BTN_FAQ, BTN_CALC],
-        [BTN_ORDER]
-    ], resize_keyboard=True)
+PORTFOLIO_TEXT = (
+    "🖼 **Наше портфолио**\n\n"
+    "Примеры наших работ:\n\n"
+    "🔹 Разработка сайтов под ключ\n"
+    "🔹 Интернет-магазины\n"
+    "🔹 Мобильные приложения\n"
+    "🔹 Telegram боты\n"
+    "🔹 UI/UX дизайн\n\n"
+    f"👉 **Смотреть все работы:** [{PORTFOLIO_URL}]({PORTFOLIO_URL})"
+)
 
-def get_back_keyboard():
-    return ReplyKeyboardMarkup([[BTN_BACK_TO_MENU]], resize_keyboard=True)
+FAQ_TEXT = (
+    "❓ **Часто задаваемые вопросы**\n\n"
+    "**• Сколько стоит сайт?**\n  Цена зависит от сложности — от 1500 ₽.\n\n"
+    "**• Сколько времени занимает разработка?**\n  От 3 до 21 дня.\n\n"
+    "**• Можно ли оплатить частями?**\n  Да, поэтапно (предоплата 30-50%).\n\n"
+    "**• Даёте ли гарантию?**\n  Да, 30 дней бесплатной поддержки.\n\n"
+    "**• Как начать?**\n  Нажмите «Оставить заявку»."
+)
 
-def get_calculator_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📄 Landing page", callback_data="price_landing")],
-        [InlineKeyboardButton("🏢 Корпоративный сайт", callback_data="price_corporate")],
-        [InlineKeyboardButton("🛒 Интернет-магазин", callback_data="price_shop")],
-        [InlineKeyboardButton("📱 Мобильное приложение", callback_data="price_app")],
-        [InlineKeyboardButton("🤖 Telegram бот", callback_data="price_bot")]
-    ])
+CONTACTS_TEXT = (
+    "📞 **Контакты VERTEX**\n\n"
+    f"📱 Telegram: {CONTACT_TELEGRAM}\n"
+    f"📧 Email: {CONTACT_EMAIL}\n"
+    f"📞 Телефон: {CONTACT_PHONE}\n"
+    f"🌐 Сайт: [{SITE_URL}]({SITE_URL})\n"
+    f"🖼 Портфолио: [{PORTFOLIO_URL}]({PORTFOLIO_URL})\n\n"
+    "🕒 Режим работы: 10:00 — 20:00 МСК"
+)
 
-def get_portfolio_inline_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 Перейти на сайт", url=PORTFOLIO_URL)]
-    ])
+# =========================
+# SEND LEAD
+# =========================
+async def send_lead_to_admin(context, user_data, user):
+    timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+    
+    msg = (
+        f"🔥 <b>НОВАЯ ЗАЯВКА VERTEX</b>\n\n"
+        f"👤 Имя: {user_data['name']}\n"
+        f"📋 Проект: {user_data['project']}\n"
+        f"💰 Бюджет: {user_data['budget']}\n"
+        f"📞 Контакт: {user_data['contact']}\n"
+        f"👤 @{user.username or '—'}\n"
+        f"🆔 {user.id}\n"
+        f"⏰ {timestamp}"
+    )
+    
+    try:
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=msg, parse_mode='HTML')
+        logger.info("✅ Заявка отправлена админу")
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки: {e}")
 
-# ==================== ОБРАБОТЧИКИ ====================
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(TEXT_START, reply_markup=get_main_keyboard())
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ℹ️ Помощь: /start - главное меню, /help - эта справка", reply_markup=get_back_keyboard())
+# =========================
+# HANDLERS
+# =========================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(START_TEXT, reply_markup=MAIN_MENU, parse_mode='HTML')
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    user = update.effective_user
 
-    if context.user_data.get('order_step'):
-        step = context.user_data.get('order_step')
-        if step == 'name':
-            context.user_data['name'] = text
-            context.user_data['order_step'] = 'project'
-            await update.message.reply_text(TEXT_AFTER_NAME)
-        elif step == 'project':
-            context.user_data['project'] = text
-            context.user_data['order_step'] = 'budget'
-            await update.message.reply_text(TEXT_AFTER_PROJECT)
-        elif step == 'budget':
-            context.user_data['budget'] = text
-            context.user_data['order_step'] = 'phone'
-            await update.message.reply_text(TEXT_AFTER_BUDGET)
-        elif step == 'phone':
-            context.user_data['phone'] = text
-            lead_info = (
-                f"🆕 НОВАЯ ЗАЯВКА!\n\n"
-                f"👤 Имя: {clean_text(context.user_data.get('name'))}\n"
-                f"📋 Проект: {clean_text(context.user_data.get('project'))}\n"
-                f"💰 Бюджет: {clean_text(context.user_data.get('budget'))}\n"
-                f"📞 Телефон: {clean_text(context.user_data.get('phone'))}\n"
-                f"🆔 Telegram: @{user.username or 'нет'}\n"
-                f"🆔 User ID: {user.id}\n"
-                f"⏰ Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-            logger.info(f"Заявка: {lead_info}")
-            try:
-                await context.bot.send_message(chat_id=YOUR_CHAT_ID, text=lead_info)
-            except Exception as e:
-                logger.error(f"Ошибка отправки: {e}")
-            await update.message.reply_text(TEXT_THANK_YOU, reply_markup=get_portfolio_inline_keyboard())
-            context.user_data.clear()
-        return
+    if text in ["🏢 О студии", "О студии"]:
+        await update.message.reply_text(ABOUT_TEXT, parse_mode='HTML')
+    elif text in ["💼 Услуги и цены", "Услуги и цены"]:
+        await update.message.reply_text(SERVICES_TEXT, parse_mode='HTML', disable_web_page_preview=True)
+    elif text in ["🖼 Портфолио", "Портфолио"]:
+        await update.message.reply_text(PORTFOLIO_TEXT, parse_mode='HTML', disable_web_page_preview=True)
+    elif text in ["❓ FAQ", "FAQ"]:
+        await update.message.reply_text(FAQ_TEXT, parse_mode='HTML')
+    elif text in ["📞 Контакты", "Контакты"]:
+        await update.message.reply_text(CONTACTS_TEXT, parse_mode='HTML', disable_web_page_preview=True)
+    elif text == "✍️ Оставить заявку":
+        await update.message.reply_text(
+            "<b>Шаг 1 из 4</b>\nВведите ваше имя:",
+            reply_markup=CANCEL_MENU,
+            parse_mode='HTML'
+        )
+        return NAME
 
-    # Обработка кнопок
-    if text == BTN_ABOUT:
-        await update.message.reply_text("🏢 КОМПАНИЯ VERTEX\nМы создаём сайты, приложения, ботов и дизайн.", reply_markup=get_back_keyboard())
-    elif text == BTN_SERVICES:
-        await update.message.reply_text(TEXT_SERVICES, reply_markup=get_back_keyboard())
-    elif text == BTN_PORTFOLIO:
-        await update.message.reply_text("🖼 Наше портфолио на сайте:", reply_markup=get_portfolio_inline_keyboard())
-    elif text == BTN_CONTACTS:
-        await update.message.reply_text("📞 Свяжитесь с нами:\n📧 Email: vertexsite07@gmail.com\n📱 Telegram: @Fulstak_raz", reply_markup=get_back_keyboard())
-    elif text == BTN_FAQ:
-        await update.message.reply_text("❓ Частые вопросы:\nСроки: от 3 дней\nОплата: предоплата 30-50%\nГарантия: 3 месяца", reply_markup=get_back_keyboard())
-    elif text == BTN_CALC:
-        await update.message.reply_text("🧮 КАЛЬКУЛЯТОР ЦЕН\nВыберите тип проекта:", reply_markup=get_calculator_keyboard())
-    elif text == BTN_ORDER:
-        context.user_data['order_step'] = 'name'
-        await update.message.reply_text(TEXT_ORDER_REQUEST, reply_markup=ReplyKeyboardMarkup([[BTN_BACK_TO_MENU]], resize_keyboard=True))
-    elif text == BTN_BACK_TO_MENU:
-        context.user_data.clear()
-        await update.message.reply_text("🔙 Главное меню:", reply_markup=get_main_keyboard())
+
+# Conversation (оставил без изменений, только улучшил confirm)
+async def name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['name'] = update.message.text.strip()
+    await update.message.reply_text("<b>Шаг 2 из 4</b>\nОпишите ваш проект:", reply_markup=CANCEL_MENU, parse_mode='HTML')
+    return PROJECT
+
+async def project(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['project'] = update.message.text
+    await update.message.reply_text("<b>Шаг 3 из 4</b>\nУкажите бюджет:", reply_markup=CANCEL_MENU, parse_mode='HTML')
+    return BUDGET
+
+async def budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['budget'] = update.message.text
+    await update.message.reply_text("<b>Шаг 4 из 4</b>\nОставьте контакт:", reply_markup=CANCEL_MENU, parse_mode='HTML')
+    return CONTACT
+
+async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['contact'] = update.message.text
+    preview = f"<b>Проверьте данные:</b>\n\n👤 {context.user_data['name']}\n📋 {context.user_data['project']}\n💰 {context.user_data['budget']}\n📞 {context.user_data['contact']}\n\nВсё верно?"
+    
+    confirm_keyboard = ReplyKeyboardMarkup([["✅ Да, отправить"], ["❌ Отменить"]], resize_keyboard=True)
+    await update.message.reply_text(preview, reply_markup=confirm_keyboard, parse_mode='HTML')
+    return CONFIRM
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().lower()
+    if any(word in text for word in ["да", "yes", "ок", "✅", "отправить"]):
+        await send_lead_to_admin(context, context.user_data, update.effective_user)
+        await update.message.reply_text("✅ <b>Заявка отправлена!</b>\nМы свяжемся с вами в ближайшее время.", reply_markup=MAIN_MENU, parse_mode='HTML')
     else:
-        await update.message.reply_text("❓ Пожалуйста, выберите пункт из меню.", reply_markup=get_main_keyboard())
+        await update.message.reply_text("❌ Заявка отменена.", reply_markup=MAIN_MENU)
+    context.user_data.clear()
+    return ConversationHandler.END
 
-async def handle_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    prices = {
-        "price_landing": "📄 Landing page\n💰 от 1500 ₽\n📅 3-5 дней",
-        "price_corporate": "🏢 Корпоративный сайт\n💰 от 3500 ₽\n📅 7-10 дней",
-        "price_shop": "🛒 Интернет-магазин\n💰 от 6000 ₽\n📅 14-21 день",
-        "price_app": "📱 Мобильное приложение\n💰 от 8000 ₽\n📅 от 30 дней",
-        "price_bot": "🤖 Telegram бот\n💰 от 1200 ₽\n📅 3-7 дней",
-    }
-    text = prices.get(query.data, "Выберите проект из списка")
-    await query.edit_message_text(
-        text=f"{text}\n\nДля точного расчёта — оставьте заявку через меню.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📝 Оставить заявку", callback_data="order")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="back_to_calc")]
-        ])
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("❌ Заявка отменена.", reply_markup=MAIN_MENU)
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+# =========================
+# MAIN
+# =========================
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("✍️ Оставить заявку"), menu_handler)],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, name)],
+            PROJECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, project)],
+            BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, budget)],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact)],
+            CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm)],
+        },
+        fallbacks=[MessageHandler(filters.Regex("❌ Отменить"), cancel)],
     )
 
-async def handle_back_to_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.edit_message_text("🧮 КАЛЬКУЛЯТОР ЦЕН\nВыберите тип проекта:", reply_markup=get_calculator_keyboard())
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(conv_handler)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handler))
 
-async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if query.data.startswith("price_"):
-        await handle_calculator(update, context)
-    elif query.data == "back_to_calc":
-        await handle_back_to_calc(update, context)
-    elif query.data == "order":
-        await query.answer()
-        await query.message.reply_text("📝 Оставьте заявку через главное меню — кнопка 'Оставить заявку'")
-    else:
-        await query.answer()
+    print("✅ VERTEX Bot запущен!")
+    app.run_polling()
 
-# ==================== ЗАПУСК ====================
-def main():
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(CallbackQueryHandler(handle_callback_query))
-
-    # Flask для health check
-    flask_app = Flask(__name__)
-    @flask_app.route('/')
-    def health():
-        return "Bot is running", 200
-    @flask_app.route(f'/webhook/{TOKEN}', methods=['POST'])
-    async def webhook():
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        await application.process_update(update)
-        return "ok", 200
-
-    import threading
-    threading.Thread(target=lambda: flask_app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)).start()
-
-    # Запуск бота в режиме webhook
-    webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TOKEN}"
-    application.run_webhook(listen="0.0.0.0", port=PORT, webhook_url=webhook_url)
 
 if __name__ == "__main__":
     main()
